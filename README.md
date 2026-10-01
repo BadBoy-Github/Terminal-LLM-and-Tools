@@ -1,8 +1,11 @@
-# Day 2: Tool-Enabled AI Agent with Switch-Statement Calculator
+# Day 2: Tool-Enabled AI Agent (Calculator, Web Search & Real-Time Context)
 
-An agentic Python terminal assistant that extends the Day 1 chatbot with **Function Calling / Tool Use**. In addition to generating text, the AI has direct access to a local Python calculator (`calculator.py`) built using Python's switch statement (`match / case`).
+An agentic Python terminal assistant that extends the Day 1 chatbot with **Function Calling / Tool Use** and **Real-Time Environmental Context**.
 
-When mathematical or calculation queries are received, the model automatically triggers a tool call to `calculate`, executes the function locally, and incorporates the verified numerical result into its final answer.
+In addition to conversational text generation, the Day 2 agent has autonomous access to:
+1. **Switch-Statement Calculator** ([`calculator.py`](calculator.py)): Performs arithmetic calculations locally using Python's `match ... case` statement.
+2. **Live Web Search** ([`web_search.py`](web_search.py)): Queries DuckDuckGo for live internet data, latest software versions, breaking news, and current events.
+3. **Real-Time Date & Time Awareness**: Injects live system clock information into the reasoning context to accurately answer date and time queries.
 
 ---
 
@@ -10,41 +13,67 @@ When mathematical or calculation queries are received, the model automatically t
 
 | Feature | Day 1 | Day 2 |
 |---|---|---|
-| **Capabilities** | Text generation only | Text generation + Tool Execution |
-| **Tools** | None | Switch-statement calculator (`calculator.py`) |
+| **Capabilities** | Text generation only | Text generation + Tool Execution + Real-time Context |
+| **Tools** | None | • Calculator (`calculator.py`)<br>• Live Web Search (`web_search.py`) |
 | **Tool Calling Protocol** | N/A | OpenAI-compatible function calling via Hugging Face API |
 | **Agentic Loop** | Single-turn completion | Multi-turn reasoning & tool execution loop |
+| **Date & Time Awareness** | None (static model cutoff) | Dynamic system prompt with real-time calendar date |
 | **Commands** | `/reset`, `/exit` | `/tools`, `/reset`, `/exit` |
 
 ---
 
-## How It Works
-
-1. **User asks a math question** (e.g., *"What is 75 multiplied by 8?"* or *"Calculate 2 to the power of 8"*).
-2. **AI decides to call the tool**: The LLM determines that a calculation is required and outputs a `tool_calls` request with the function name `calculate` and arguments `{"operation": "multiply", "a": 75, "b": 8}`.
-3. **Switch-statement calculator executes**: The `calculate` function in [`calculator.py`](calculator.py) matches the operation via Python's switch statement (`match op: case ...`) and performs the computation.
-4. **Tool result sent back to AI**: The result (`600`) is returned to the model with role `"tool"`.
-5. **Final response synthesized**: The model receives the verified tool output and crafts a clear response for the user.
+## Architecture & How It Works
 
 ```
-+----------+      "What is 75 * 8?"      +------------+
-|   User   | -------------------------> |  Day 2 AI  |
-+----------+                            +------------+
-     ^                                         |
-     |                                         | Tool Call:
-     | "75 multiplied by 8 is 600."            | calculate('multiply', 75, 8)
-     |                                         v
-+----------+      Result: 600           +-----------------+
-| Response | <------------------------- |  calculator.py  |
-+----------+                            |  (match / case) |
-                                        +-----------------+
+                        +----------------------+
+                        |         User         |
+                        +----------------------+
+                                   |
+                                   | "What is the current React version?"
+                                   v
+                        +----------------------+
+                        |   Day 2 AI Agent     |  <--- Real-Time Date Context
+                        | (ibm-granite-4.2-3b) |       (e.g., Today is October 1, 2026)
+                        +----------------------+
+                               /        \
+          Math Query          /          \          Live / Web Query
+                             /            \
+                            v              v
+                  +---------------+  +------------------+
+                  | calculator.py |  |  web_search.py   |
+                  | (match/case)  |  |   (DuckDuckGo)   |
+                  +---------------+  +------------------+
+                            \              /
+                             \            /
+                              v          v
+                        +----------------------+
+                        | Verified Tool Result |
+                        +----------------------+
+                                   |
+                                   v
+                        +----------------------+
+                        | Final Response       |
+                        | Synthesized to User  |
+                        +----------------------+
 ```
+
+1. **User asks a question** (e.g., *"What is 125 * 8?"* or *"current react version"* or *"current date"*).
+2. **AI selects the appropriate tool or context**:
+   - **Math questions** $\rightarrow$ calls `calculate(operation='multiply', a=125, b=8)`.
+   - **Real-time / web questions** $\rightarrow$ calls `web_search(query='current React version')`.
+   - **Calendar / date questions** $\rightarrow$ resolves using dynamic system date context.
+   - **General conversational queries** $\rightarrow$ answers directly without invoking tools.
+3. **Local Tool Execution**: The chosen tool runs locally in Python and returns structured results.
+4. **Tool Result Fed Back to AI**: The chatbot passes the output with `role: "tool"` back to the model.
+5. **Final Answer Synthesized**: The AI formulates an accurate, grounded response for the user.
 
 ---
 
-## Calculator Details (`calculator.py`)
+## Tool Details
 
-The calculator is implemented using Python 3.10+ switch syntax (`match ... case`):
+### 1. Switch-Statement Calculator (`calculator.py`)
+
+Implemented using Python 3.10+ switch statement (`match ... case`):
 
 - **Supported operations**:
   - `add` (`+`, `plus`, `sum`)
@@ -53,14 +82,20 @@ The calculator is implemented using Python 3.10+ switch syntax (`match ... case`
   - `divide` (`/`, `division`) — includes division-by-zero protection
   - `power` (`**`, `^`, `pow`, `exponent`)
   - `modulo` (`%`, `mod`) — includes modulo-by-zero protection
-- **Safe Type Conversion**: Automatically handles integer and float inputs.
-- **Standalone testable**: Run `python calculator.py` to run built-in test cases.
+- **Safe Type Conversion**: Automatically handles string, integer, and float inputs.
+- **Standalone testable**: Run `python calculator.py` to run built-in test suites.
+
+### 2. Live Web Search (`web_search.py`)
+
+- **Engine**: Powered by `ddgs` (DuckDuckGo search), requiring **no paid API keys**.
+- **Features**: Fetches real-time web results, extracts titles and summaries, and returns source URLs.
+- **Standalone testable**: Run `python web_search.py` to test queries directly from the command line.
 
 ---
 
 ## Setup (Windows PowerShell)
 
-### 1. Create & Activate Virtual Environment
+### 1. Create and Activate Virtual Environment
 
 ```powershell
 cd "Day 2"
@@ -74,9 +109,9 @@ py -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-### 3. Configure API Credentials
+### 3. Configure Credentials
 
-Ensure `.env` exists in the `Day 2` directory with your Hugging Face credentials:
+Ensure `.env` exists in `Day 2` with your Hugging Face credentials:
 
 ```powershell
 Copy-Item .env.example .env
@@ -84,7 +119,7 @@ Copy-Item .env.example .env
 
 Open `.env` and verify:
 ```dotenv
-HF_TOKEN=your_huggingface_token
+HF_TOKEN=hf_your_token_here
 HF_MODEL=ibm-granite/granite-4.2-3b
 ```
 
@@ -92,22 +127,51 @@ HF_MODEL=ibm-granite/granite-4.2-3b
 
 ## Running the Chatbot
 
-Activate the virtual environment and run:
+Activate the virtual environment and start the agent:
 
 ```powershell
 python chatbot.py
 ```
 
-### Example Questions to Try
+### Example Interactions
 
-- **Multiplication**: `What is 75 multiplied by 8?`
-- **Division**: `What is 144 divided by 12?`
-- **Powers / Exponents**: `Calculate 2 to the power of 10.`
-- **Modulo**: `What is 29 modulo 5?`
-- **Non-math queries**: `What is the capital of France?` (Answers directly without invoking tools)
+#### 1. Real-Time Date Awareness
+```text
+You: current date
+Assistant: Today's date is Thursday, October 1, 2026.
 
-### Available Commands
+You: yesterdays date
+Assistant: Yesterday was Wednesday, September 30, 2026.
+```
 
-- `/tools` - Inspect available tools, operations, and parameters.
-- `/reset` - Clear the current conversation history.
-- `/exit`  - Exit the chatbot.
+#### 2. Switch-Statement Calculator
+```text
+You: What is 125 * 8?
+
+[TOOL CALL] Invoking 'calculate'
+            Arguments: {"operation": "multiply", "a": 125, "b": 8}
+[TOOL OUTPUT] Result: 1000
+
+Assistant: 125 × 8 = 1,000.
+```
+
+#### 3. Live Web Search
+```text
+You: current react version
+
+[TOOL CALL] Invoking 'web_search'
+            Arguments: {"query": "current React version"}
+[TOOL OUTPUT] Result:
+[1] React Versions - React
+Summary: The React docs at react.dev provide documentation for the latest version of React...
+Source: https://react.dev/versions
+
+Assistant: The latest (current) React version is React 19.3, released on September 9, 2026.
+```
+
+### Available Interactive Commands
+
+- `/tools` - Display currently available tools, their descriptions, and parameter schemas.
+- `/reset` - Clear the current conversation history and reinitialize the system prompt.
+- `/exit`  - Terminate the chatbot session.
+
